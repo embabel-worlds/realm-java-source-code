@@ -67,8 +67,9 @@
     matches: { type: boolean, description: "The declaration's name is the one the jar expects at the line." }
     url: "The declaration on the web, for a git root on a known host."
   virtualJoins:
-    - { anchorLabel: JavaSource, relationship: DECLARES, keyField: sourceKey, recordKeyField: anchorKey, producer: javaDeclarationsInFile,
-        description: "Every declaration in a file, in file order." }
+    - { anchorLabel: JavaSource, relationship: DECLARES, keyField: sourceKey, recordKeyField: anchorKey, maxFanoutTotal: 100000,
+        producer: javaDeclarationsInFile,
+        description: "Every declaration in a file, in file order. A whole jar's declarations are read locally, so the cap is set for a jar's worth." }
     - { anchorLabel: JavaMethod, relationship: DECLARED_AT, keyField: spanKey, recordKeyField: anchorKey, producer: javaDeclarationAt,
         description: "A method's whole declaration in source — signature, Javadoc, body." }
 
@@ -103,7 +104,8 @@
     enclosingOwner: "Binary name of the type declaring the enclosing member."
     url: "The line on the web, for a git root on a known host."
   virtualJoins:
-    - { anchorLabel: JavaSource, relationship: DECLARES_LOCAL, keyField: sourceKey, recordKeyField: anchorKey, producer: javaLocalsInFile,
+    - { anchorLabel: JavaSource, relationship: DECLARES_LOCAL, keyField: sourceKey, recordKeyField: anchorKey, maxFanoutTotal: 100000,
+        producer: javaLocalsInFile,
         description: "Every local variable in a file, in file order." }
     - { anchorLabel: JavaMethod, relationship: HAS_LOCAL, keyField: spanKey, recordKeyField: anchorKey, producer: javaLocalsOfMethod,
         description: "The local variables of one method, constructor or initializer." }
