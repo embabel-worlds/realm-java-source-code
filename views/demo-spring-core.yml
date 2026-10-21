@@ -23,3 +23,25 @@
           (m:JavaMethod {owner: 'org.springframework.util.StringUtils', name: 'hasText'})-[:DECLARED_AT]->(d:JavaDeclaration)
     RETURN m.key AS method, d.signature AS signature, d.javadoc AS javadoc, d.text AS code
     ORDER BY d.fromLine
+
+- name: SpringCoreLongestMethods
+  description: >-
+    Demo, spring-core: the ten longest methods in spring-core 6.2.18, by the lines their source
+    declarations span.
+  cypher: |
+    MATCH (j:Jar {path: 'data/jars/spring-core-6.2.18.jar'})-[:HAS_TYPE]->(t:JavaType {nesting: 'top-level'})-[:DEFINED_IN]->(s:JavaSource)-[:DECLARES]->(d:JavaDeclaration)
+    WHERE d.kind IN ['method', 'constructor']
+    RETURN d.owner AS owner, d.name AS method, d.toLine - d.fromLine + 1 AS lines, s.path AS path, d.fromLine AS fromLine
+    ORDER BY lines DESC, owner, fromLine
+    LIMIT 10
+
+- name: SpringCoreStringLocalsVarWouldKeep
+  description: >-
+    Demo, spring-core: methods declaring `String s = …` where `var s = …` would keep the type.
+  cypher: |
+    MATCH (j:Jar {path: 'data/jars/spring-core-6.2.18.jar'})-[:HAS_TYPE]->(t:JavaType {nesting: 'top-level'})-[:DEFINED_IN]->(s:JavaSource)-[:DECLARES_LOCAL]->(l:JavaLocal {declaredType: 'String'})
+    WHERE l.isVar = false AND l.varPreservesType = true
+    WITH l.enclosingOwner AS owner, l.enclosing AS method, collect(toString(l.line) + ': ' + l.declaredType + ' ' + l.name + ' = ' + l.initializer) AS declarations
+    RETURN owner, method, size(declarations) AS explicitLocals, declarations
+    ORDER BY explicitLocals DESC, owner, method
+    LIMIT 20

@@ -34,14 +34,20 @@ means the name the jar expects is not on those lines.
 
 See `types/source.yml`. JavaType ─DEFINED_IN▶ JavaSource ─DECLARES▶ JavaDeclaration; JavaMethod,
 JavaMethodCall and JavaFieldAccess ─SOURCE_AT▶ SourceSpan; JavaMethod ─DECLARED_AT▶ JavaDeclaration;
-JavaMethodCall ─AT_SITE▶ JavaCallSite. JavaSource, JavaDeclaration and JavaCallSite are the Java
-children of the standard model's `Source`, `SourceDeclaration` and `CallSite`.
+JavaMethodCall ─AT_SITE▶ JavaCallSite; JavaSource ─DECLARES_LOCAL▶ JavaLocal and JavaMethod
+─HAS_LOCAL▶ JavaLocal. JavaSource, JavaDeclaration, JavaCallSite and JavaLocal are the Java children
+of the standard model's `Source`, `SourceDeclaration`, `CallSite` and `SourceLocal`.
 
 Declarations and call sites come from a Java file's syntax tree, parsed on demand. A call site's
 argument types are resolved from the file alone (`new X(…)`, literals, casts, parameters, locals,
-fields); a type only another file could explain is left as written and marked unresolved.
+fields); a type only another file could explain is left as written and marked unresolved. A local
+says whether `var` is legal for it and whether `var` would keep its declared type, by the same rules.
+
+Views that read the whole jar's source: `JavaLongestMethods` (the longest methods by the lines their
+declarations span) and `JavaExplicitLocalsVarWouldKeep` (methods declaring `String s = "x"` where
+`var s` would keep the type).
 
 ## Example
 
 Ships `data/sources/spring-core-6.2.18-sources.jar` (Apache-2.0, from Maven Central), the sources
-of realm-java-code's example jar, with two demo views over it.
+of realm-java-code's example jar, with four demo views over it.
