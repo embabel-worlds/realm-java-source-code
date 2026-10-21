@@ -1,0 +1,25 @@
+# DEMO ONLY. Source questions about realm-java-code's example jar, spring-core 6.2.18, answered
+# from the sources jar this realm ships. Each pins the demo jar and asks a Spring-flavoured
+# instance of a general view.
+
+- name: SpringCoreClassCacheCode
+  description: >-
+    Demo, spring-core: the code that fills ClassUtils.commonClassCache - each method touching the
+    field, the map call it makes, and what it puts.
+  cypher: |
+    MATCH (j:Jar {path: 'data/jars/spring-core-6.2.18.jar'})-[:HAS_ACCESS]->(a:JavaFieldAccess {field: 'org.springframework.util.ClassUtils.commonClassCache'})
+          -[:SAME_METHOD_CALL]->(c:JavaMethodCall {calleeName: 'put'})
+    OPTIONAL MATCH (c)-[:AT_SITE]->(cs:JavaCallSite)
+    RETURN a.method AS method, cs.line AS line, cs.receiver AS map, cs.arguments AS arguments,
+           cs.argumentTypes AS argumentTypes, cs.text AS code
+    ORDER BY method, line
+
+- name: SpringCoreHasText
+  description: >-
+    Demo, spring-core: StringUtils.hasText as source declares it - both overloads, with Javadoc
+    and body.
+  cypher: |
+    MATCH (j:Jar {path: 'data/jars/spring-core-6.2.18.jar'})-[:HAS_METHOD]->
+          (m:JavaMethod {owner: 'org.springframework.util.StringUtils', name: 'hasText'})-[:DECLARED_AT]->(d:JavaDeclaration)
+    RETURN m.key AS method, d.signature AS signature, d.javadoc AS javadoc, d.text AS code
+    ORDER BY d.fromLine

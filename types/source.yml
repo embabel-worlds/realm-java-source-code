@@ -1,0 +1,87 @@
+# Java source as a graph, reached from compiled code. Nothing in this realm is stored: every node is
+# VIRTUAL, read by the `source` producer kind when a query reaches it. It adds edges from
+# realm-java-code's types into source, by re-declaring those types with joins only (declarations of
+# one type name merge), keyed on the `sourceKey` / `spanKey` their rows already carry:
+#
+#   JavaType ─DEFINED_IN▶ JavaSource ─DECLARES▶ JavaDeclaration
+#   JavaMethod ─SOURCE_AT▶ SourceSpan     JavaMethod ─DECLARED_AT▶ JavaDeclaration (its whole declaration)
+#   JavaMethodCall ─SOURCE_AT▶ SourceSpan  JavaMethodCall ─AT_SITE▶ JavaCallSite (receiver, arguments, their types)
+#   JavaFieldAccess ─SOURCE_AT▶ SourceSpan  SourceSpan ─IN_FILE▶ JavaSource
+#
+# Each is the Java child of a language-neutral parent the standard model declares —
+# JavaSource:Source, JavaDeclaration:SourceDeclaration, JavaCallSite:CallSite — and SourceSpan is
+# itself neutral. A span's `matches` is false when the name the jar expects is not on its lines:
+# the source is not the jar's version, and its line numbers cannot be trusted.
+
+- name: JavaSource
+  parents: [Source]
+  description: "A Java (or other JVM language) source file a jar's classes were compiled from, read from a -sources.jar, a mounted checkout or a git commit. `root` says which; `candidates` above 1 means more than one file in the root has that package path (two modules), and the first was read. Its declarations: DECLARES."
+  properties:
+    id: { identity: true, description: "`<root>!<path>`." }
+    root: "Where it was found: a -sources.jar or folder (relative to the world's data/ or this realm), or `host/repo@commit`."
+    path: "Path within the root, e.g. `spring-core/src/main/java/org/x/Cache.java`."
+    sourcePath: "The package path a class file implies, e.g. `org/x/Cache.java`."
+    sourceKey: "`<jar path>!<sourcePath>`."
+    jarPath: "The jar whose source this is."
+    language: "`java`, `kotlin`, `scala`, `groovy`, …, from the file extension."
+    package: "The package the file declares."
+    lines: { type: int, description: "Line count." }
+    sha256: "Hash of the file."
+    candidates: { type: int, description: "Files in the root with this package path." }
+    commit: "The commit it was read at, for a git root."
+    url: "The file on the web, for a git root on github.com or gitlab.com."
+  virtualJoins:
+    - { anchorLabel: JavaType, relationship: DEFINED_IN, keyField: sourceKey, recordKeyField: anchorKey, producer: javaSourceFile,
+        description: "The source file a type compiled from. Nested classes share their outer class's file." }
+    - { anchorLabel: SourceSpan, relationship: IN_FILE, keyField: sourceKey, recordKeyField: anchorKey, producer: javaSourceFile,
+        description: "The file a span of lines is in." }
+
+- name: SourceSpan
+  properties:
+    sourceKey: "`<jar path>!<sourcePath>` of the file the span is in."
+    root: "Where the file was found."
+    path: "The file's path within the root."
+    inRange: { type: boolean, description: "False when the line asked for is past the end of the file: certainly another version." }
+  virtualJoins:
+    - { anchorLabel: JavaMethod, relationship: SOURCE_AT, keyField: spanKey, recordKeyField: anchorKey, producer: javaSourceSpan,
+        description: "The lines around a method's first line." }
+    - { anchorLabel: JavaMethodCall, relationship: SOURCE_AT, keyField: spanKey, recordKeyField: anchorKey, producer: javaSourceSpan,
+        description: "The lines around the first call site of a call." }
+    - { anchorLabel: JavaFieldAccess, relationship: SOURCE_AT, keyField: spanKey, recordKeyField: anchorKey, producer: javaSourceSpan,
+        description: "The lines around the first site of a field access." }
+
+- name: JavaDeclaration
+  parents: [SourceDeclaration]
+  description: "A declaration in a Java file's syntax tree — class, interface, enum, record, annotation, field, constructor, method or initializer — with its exact extent, signature, modifiers, annotations, Javadoc and (for members) full numbered text. `matches` (reached from a method) is false when the declaration around the line is not the method the jar names there."
+  properties:
+    id: { identity: true, description: "`<root>!<path>#<kind>:<name>@<fromLine>`." }
+    sourceKey: "`<jar path>!<sourcePath>` of its file."
+    path: "The file's path within its root."
+    owner: "Binary name of the declaring type (`pkg.Outer$Inner`); empty inside an anonymous or local class."
+    modifiers: { cardinality: LIST, description: "e.g. public, static, final." }
+    annotations: { cardinality: LIST, description: "Annotation names as written." }
+    parameters: { cardinality: LIST, description: "Parameters as written, `Type name`." }
+    returnType: "A method's return type as written."
+    type: "A field's type as written."
+    matches: { type: boolean, description: "The declaration's name is the one the jar expects at the line." }
+    url: "The declaration on the web, for a git root on a known host."
+  virtualJoins:
+    - { anchorLabel: JavaSource, relationship: DECLARES, keyField: sourceKey, recordKeyField: anchorKey, producer: javaDeclarationsInFile,
+        description: "Every declaration in a file, in file order." }
+    - { anchorLabel: JavaMethod, relationship: DECLARED_AT, keyField: spanKey, recordKeyField: anchorKey, producer: javaDeclarationAt,
+        description: "A method's whole declaration in source — signature, Javadoc, body." }
+
+- name: JavaCallSite
+  parents: [CallSite]
+  description: "One call in Java source at the line a jar's call row points to: what it is called on and what is passed, with each argument's static type where the file alone shows it (`new X(…)`, a literal, a cast, a parameter, a local declared before it, a field). `argumentTypesResolved` is false where a type was written but could not be resolved without other files."
+  properties:
+    sourceKey: "`<jar path>!<sourcePath>` of its file."
+    path: "The file's path within its root."
+    column: { type: int, description: "Column of the call." }
+    argumentTypesResolved: { cardinality: LIST, description: "Per argument: its type was resolved to a binary name." }
+    text: "The call as written."
+    enclosingOwner: "Binary name of the type declaring the enclosing member."
+    url: "The line on the web, for a git root on a known host."
+  virtualJoins:
+    - { anchorLabel: JavaMethodCall, relationship: AT_SITE, keyField: spanKey, recordKeyField: anchorKey, producer: javaCallSitesAt,
+        description: "Each call in source on the line of a call's first site, with its receiver and arguments." }

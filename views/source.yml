@@ -1,0 +1,97 @@
+# Questions answered by code read from source. Every view takes `jar`, the jar realm-java-code
+# reads; the source is whatever this realm's producers find for it. No view names a library.
+
+- name: JavaTypeSource
+  description: >-
+    Where a type's source is: which root answered (a -sources.jar, a folder, a git commit), its
+    path there, and its size - the first call when source matters, and proof it was found.
+  params:
+    jar: { type: string, description: "Path of the jar." }
+    type: { type: string, description: "Binary class name, e.g. com.example.Cache." }
+  cypher: |
+    MATCH (j:Jar {path: $jar})-[:HAS_TYPE]->(t:JavaType {name: $type})-[:DEFINED_IN]->(s:JavaSource)
+    RETURN t.name AS type, s.root AS root, s.path AS path, s.language AS language, s.lines AS lines,
+           s.candidates AS candidates, s.commit AS commit, s.url AS url
+
+- name: JavaMethodDeclarations
+  description: >-
+    A type's methods (or those with one name) as source declares them: signature, Javadoc,
+    annotations and the whole numbered body - what a stack frame's method actually does.
+  params:
+    jar: { type: string, description: "Path of the jar." }
+    type: { type: string, description: "Binary class name declaring the method." }
+    method: { type: string, default: "", description: "Method name; empty = every method of the type." }
+  cypher: |
+    MATCH (j:Jar {path: $jar})-[:HAS_METHOD]->(m:JavaMethod {owner: $type})-[:DECLARED_AT]->(d:JavaDeclaration)
+    WHERE $method = '' OR m.name = $method
+    RETURN m.key AS method, d.signature AS signature, d.javadoc AS javadoc, d.annotations AS annotations,
+           d.fromLine AS fromLine, d.toLine AS toLine, d.matches AS matches, d.text AS code
+    ORDER BY fromLine
+
+- name: JavaCallersWithCode
+  description: >-
+    Who calls a method (any target: the JDK, another library, the jar), with the source lines at
+    each call - the callers view with the code beside it.
+  params:
+    jar: { type: string, description: "Path of the jar." }
+    type: { type: string, description: "Binary name of the called type." }
+    method: { type: string, description: "Called method name; `<init>` for a constructor." }
+    limit: { type: int, default: 50, description: "Maximum rows." }
+  cypher: |
+    MATCH (j:Jar {path: $jar})-[:HAS_CALL]->(c:JavaMethodCall {calleeOwner: $type, calleeName: $method})
+    OPTIONAL MATCH (c)-[:SOURCE_AT]->(s:SourceSpan)
+    RETURN c.caller AS caller, c.lines AS lines, s.matches AS matches, s.text AS code, s.url AS url
+    ORDER BY caller
+    LIMIT $limit
+
+- name: JavaMapPutCallSites
+  description: >-
+    Every call that puts into a JDK map in the jar, as source writes it: the map it is called on,
+    each argument, and the key's static type where the file shows it - joined to whether that type
+    (when it is in the jar) has its own hashCode. Finds identity-hashed keys put into maps held
+    anywhere, locals included, which the field view cannot see.
+  params:
+    jar: { type: string, description: "Path of the jar." }
+    limit: { type: int, default: 200, description: "Maximum rows." }
+  cypher: |
+    MATCH (j:Jar {path: $jar})-[:HAS_CALL]->(c:JavaMethodCall)-[:AT_SITE]->(cs:JavaCallSite)
+    WHERE c.calleeOwner STARTS WITH 'java.util.' AND c.calleeName IN ['put', 'putIfAbsent', 'computeIfAbsent', 'merge']
+    OPTIONAL MATCH (j)-[:HAS_TYPE]->(k:JavaType)
+    WHERE k.name = cs.argumentTypes[0]
+    RETURN c.caller AS caller, cs.line AS line, cs.receiver AS map, cs.receiverType AS mapType,
+           cs.arguments AS arguments, cs.argumentTypes[0] AS keyType, k.hashCodeFrom AS keyHashCodeFrom, cs.url AS url
+    ORDER BY keyHashCodeFrom DESC, caller
+    LIMIT $limit
+
+- name: JavaFieldMutationCode
+  description: >-
+    For one field: each method that touches it and the JDK container calls that method makes,
+    with the code at each call and what it passes - JavaFieldMutationSites with the source.
+  params:
+    jar: { type: string, description: "Path of the jar." }
+    field: { type: string, description: "Field key `<binary owner>.<name>`, e.g. org.example.Util.CACHE." }
+  cypher: |
+    MATCH (j:Jar {path: $jar})-[:HAS_ACCESS]->(a:JavaFieldAccess {field: $field})-[:SAME_METHOD_CALL]->(c:JavaMethodCall)
+    WHERE c.calleeOwner STARTS WITH 'java.' AND c.calleeName IN ['put', 'putAll', 'putIfAbsent', 'computeIfAbsent',
+          'compute', 'merge', 'add', 'addAll', 'remove', 'removeIf', 'clear', 'poll']
+    OPTIONAL MATCH (c)-[:AT_SITE]->(cs:JavaCallSite)
+    RETURN a.method AS method, c.calleeName AS call, cs.line AS line, cs.receiver AS receiver,
+           cs.arguments AS arguments, cs.argumentTypes AS argumentTypes, cs.text AS code
+    ORDER BY method, line
+
+- name: JavaSourceDrift
+  description: >-
+    Whether the source found matches the jar, for one package: per class, how many methods' first
+    lines show the method's name. A class with misses was read from another version of its source,
+    and its line numbers cannot be trusted. Counts ordinary classes' declared methods only:
+    constructors (whose first line is often a field initializer), synthetic methods, and the
+    members a compiler writes for records and enums never show their own name on their line.
+  params:
+    jar: { type: string, description: "Path of the jar." }
+    package: { type: string, description: "Dotted package name to check." }
+  cypher: |
+    MATCH (j:Jar {path: $jar})-[:HAS_TYPE]->(t:JavaType {packageName: $package, kind: 'class'})
+          -[:DECLARES_METHOD]->(m:JavaMethod {kind: 'method', isSynthetic: false})-[:SOURCE_AT]->(s:SourceSpan)
+    WITH t.name AS type, count(*) AS methods, sum(CASE WHEN s.matches THEN 1 ELSE 0 END) AS matching
+    RETURN type, methods, matching, methods - matching AS drifted
+    ORDER BY drifted DESC, type

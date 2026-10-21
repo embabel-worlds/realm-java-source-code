@@ -1,0 +1,23 @@
+# Every producer reads source where it is, through the appliance's `source` producer kind, when a
+# query reaches it. A key is a `sourceKey` (`<jar path>!com/x/Cache.java`) or a `spanKey`
+# (`…#<line>#<name>`) that realm-java-code's rows already carry. For a jar, the source is looked
+# for in this order:
+#
+#   1. `<jar name>-sources.jar` beside the jar — no configuration at all;
+#   2. each root below, in order: a `<jar name>-sources.jar` inside it, then the folder itself as
+#      a source tree (a checkout, any module layout), or a git repository at a commit.
+#
+# Roots resolve against the world's data/ tree, an operator-trusted root, or this realm's own
+# directory (which is where the example sources are). To read your own code, mount or clone it
+# under the world's data/src/ — or add a git root:
+#
+#   - { git: "https://github.com/<owner>/<repo>", ref: "v{version}" }   # {version}: the jar's
+#
+# The declarations and call-site producers parse a Java file's syntax tree; a file in another
+# language answers files and spans only, with a warning saying so.
+
+- { name: javaSourceFile,         kind: source, emit: files,        roots: [data/sources, src] }
+- { name: javaSourceSpan,         kind: source, emit: spans,        roots: [data/sources, src], context: 6 }
+- { name: javaDeclarationsInFile, kind: source, emit: declarations, roots: [data/sources, src] }
+- { name: javaDeclarationAt,      kind: source, emit: declarations, roots: [data/sources, src] }
+- { name: javaCallSitesAt,        kind: source, emit: callsites,    roots: [data/sources, src] }
