@@ -95,3 +95,53 @@
     WITH t.name AS type, count(*) AS methods, sum(CASE WHEN s.matches THEN 1 ELSE 0 END) AS matching
     RETURN type, methods, matching, methods - matching AS drifted
     ORDER BY drifted DESC, type
+
+- name: JavaLongestMethods
+  description: >-
+    The longest methods and constructors in a jar's code, by the lines their declarations span in
+    source (Javadoc and annotations excluded), with where each is and its code - the first place to
+    look for a method doing too much.
+  params:
+    jar: { type: string, description: "Path of the jar." }
+    package: { type: string, default: "", description: "Dotted package prefix to look under; empty = the whole jar." }
+    limit: { type: int, default: 10, description: "Maximum rows." }
+  cypher: |
+    MATCH (j:Jar {path: $jar})-[:HAS_TYPE]->(t:JavaType {nesting: 'top-level'})-[:DEFINED_IN]->(s:JavaSource {language: 'java'})-[:DECLARES]->(d:JavaDeclaration)
+    WHERE d.kind IN ['method', 'constructor'] AND ($package = '' OR t.packageName STARTS WITH $package)
+    RETURN d.owner AS owner, d.name AS method, d.signature AS signature, d.toLine - d.fromLine + 1 AS lines,
+           s.path AS path, d.fromLine AS fromLine, d.toLine AS toLine, d.url AS url, d.text AS code
+    ORDER BY lines DESC, owner, fromLine
+    LIMIT $limit
+
+- name: JavaExplicitLocalsVarWouldKeep
+  description: >-
+    Methods that declare a local with an explicit type where `var` would do and keep the same type -
+    `String s = "x"` rather than `var s = "x"` - with each such declaration. Only locals the file
+    proves `var` would not change; set `type` to look at one declared type (e.g. String).
+  params:
+    jar: { type: string, description: "Path of the jar." }
+    type: { type: string, default: "", description: "Declared type as written, e.g. String; empty = any." }
+    limit: { type: int, default: 50, description: "Maximum methods." }
+  cypher: |
+    MATCH (j:Jar {path: $jar})-[:HAS_TYPE]->(t:JavaType {nesting: 'top-level'})-[:DEFINED_IN]->(s:JavaSource {language: 'java'})-[:DECLARES_LOCAL]->(l:JavaLocal)
+    WHERE l.isVar = false AND l.varPreservesType = true AND ($type = '' OR l.declaredType = $type)
+    WITH l.enclosingOwner AS owner, l.enclosing AS method, s.path AS path,
+         collect(toString(l.line) + ': ' + l.declaredType + ' ' + l.name + ' = ' + l.initializer) AS declarations
+    RETURN owner, method, path, size(declarations) AS explicitLocals, declarations
+    ORDER BY explicitLocals DESC, owner, method
+    LIMIT $limit
+
+- name: JavaMethodLocals
+  description: >-
+    One method's local variables as source declares them: each one's type as written, what it is
+    given, and whether `var` would be legal and keep its type.
+  params:
+    jar: { type: string, description: "Path of the jar." }
+    type: { type: string, description: "Binary class name declaring the method." }
+    method: { type: string, description: "Method name; `<init>` for a constructor." }
+  cypher: |
+    MATCH (j:Jar {path: $jar})-[:HAS_METHOD]->(m:JavaMethod {owner: $type, name: $method})-[:HAS_LOCAL]->(l:JavaLocal)
+    RETURN m.key AS method, l.line AS line, l.kind AS kind, l.declaredType AS declaredType, l.name AS name,
+           l.initializer AS initializer, l.initializerType AS initializerType, l.isVar AS isVar,
+           l.varEligible AS varEligible, l.varPreservesType AS varKeepsType
+    ORDER BY method, line

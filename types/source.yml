@@ -7,9 +7,10 @@
 #   JavaMethod ─SOURCE_AT▶ SourceSpan     JavaMethod ─DECLARED_AT▶ JavaDeclaration (its whole declaration)
 #   JavaMethodCall ─SOURCE_AT▶ SourceSpan  JavaMethodCall ─AT_SITE▶ JavaCallSite (receiver, arguments, their types)
 #   JavaFieldAccess ─SOURCE_AT▶ SourceSpan  SourceSpan ─IN_FILE▶ JavaSource
+#   JavaSource ─DECLARES_LOCAL▶ JavaLocal   JavaMethod ─HAS_LOCAL▶ JavaLocal (its own locals)
 #
 # Each is the Java child of a language-neutral parent the standard model declares —
-# JavaSource:Source, JavaDeclaration:SourceDeclaration, JavaCallSite:CallSite — and SourceSpan is
+# JavaSource:Source, JavaDeclaration:SourceDeclaration, JavaCallSite:CallSite, JavaLocal:SourceLocal — and SourceSpan is
 # itself neutral. A span's `matches` is false when the name the jar expects is not on its lines:
 # the source is not the jar's version, and its line numbers cannot be trusted.
 
@@ -66,8 +67,9 @@
     matches: { type: boolean, description: "The declaration's name is the one the jar expects at the line." }
     url: "The declaration on the web, for a git root on a known host."
   virtualJoins:
-    - { anchorLabel: JavaSource, relationship: DECLARES, keyField: sourceKey, recordKeyField: anchorKey, producer: javaDeclarationsInFile,
-        description: "Every declaration in a file, in file order." }
+    - { anchorLabel: JavaSource, relationship: DECLARES, keyField: sourceKey, recordKeyField: anchorKey, maxFanoutTotal: 100000,
+        producer: javaDeclarationsInFile,
+        description: "Every declaration in a file, in file order. A whole jar's declarations are read locally, so the cap is set for a jar's worth." }
     - { anchorLabel: JavaMethod, relationship: DECLARED_AT, keyField: spanKey, recordKeyField: anchorKey, producer: javaDeclarationAt,
         description: "A method's whole declaration in source — signature, Javadoc, body." }
 
@@ -85,3 +87,25 @@
   virtualJoins:
     - { anchorLabel: JavaMethodCall, relationship: AT_SITE, keyField: spanKey, recordKeyField: anchorKey, producer: javaCallSitesAt,
         description: "Each call in source on the line of a call's first site, with its receiver and arguments." }
+
+- name: JavaLocal
+  parents: [SourceLocal]
+  description: "A local variable in Java source — a plain local, a `for` or enhanced-`for` variable, a try-with-resources resource, an `instanceof` pattern binding — with its type as written and what it is given. `varEligible`: the language allows `var` here. `varPreservesType`: `var` would keep the declared type (true for `String s = \"x\"`; false for `long n = 1`, `List<X> xs = new ArrayList<>()`, a diamond or an anonymous class); null when the initializer's type is not in the file."
+  properties:
+    sourceKey: "`<jar path>!<sourcePath>` of its file."
+    path: "The file's path within its root."
+    column: { type: int, description: "Column of the variable's name." }
+    isVar: { type: boolean, description: "Declared with `var`." }
+    isFinal: { type: boolean, description: "Declared final." }
+    initializerTypeResolved: { type: boolean, description: "The initializer's type was resolved to a binary name." }
+    varEligible: { type: boolean, description: "`var` is legal here: one variable, given a value that is not null, an array initializer, a lambda or a method reference." }
+    varPreservesType: { type: boolean, description: "`var` would give it the type it declares; null when the file alone cannot tell." }
+    enclosingKind: "`method`, `constructor` or `initializer`."
+    enclosingOwner: "Binary name of the type declaring the enclosing member."
+    url: "The line on the web, for a git root on a known host."
+  virtualJoins:
+    - { anchorLabel: JavaSource, relationship: DECLARES_LOCAL, keyField: sourceKey, recordKeyField: anchorKey, maxFanoutTotal: 100000,
+        producer: javaLocalsInFile,
+        description: "Every local variable in a file, in file order." }
+    - { anchorLabel: JavaMethod, relationship: HAS_LOCAL, keyField: spanKey, recordKeyField: anchorKey, producer: javaLocalsOfMethod,
+        description: "The local variables of one method, constructor or initializer." }

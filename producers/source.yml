@@ -13,7 +13,7 @@
 #
 #   - { git: "https://github.com/<owner>/<repo>", ref: "v{version}" }   # {version}: the jar's
 #
-# The declarations and call-site producers parse a Java file's syntax tree; a file in another
+# The declarations, call-site and locals producers parse a Java file's syntax tree; a file in another
 # language answers files and spans only, with a warning saying so.
 
 - { name: javaSourceFile,         kind: source, emit: files,        roots: [data/sources, src] }
@@ -21,3 +21,5 @@
 - { name: javaDeclarationsInFile, kind: source, emit: declarations, roots: [data/sources, src] }
 - { name: javaDeclarationAt,      kind: source, emit: declarations, roots: [data/sources, src] }
 - { name: javaCallSitesAt,        kind: source, emit: callsites,    roots: [data/sources, src] }
+- { name: javaLocalsInFile,       kind: source, emit: locals,       roots: [data/sources, src] }
+- { name: javaLocalsOfMethod,     kind: source, emit: locals,       roots: [data/sources, src] }
