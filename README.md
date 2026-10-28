@@ -5,6 +5,8 @@ The source a Java jar was compiled from, reached from what
 this realm only adds edges from realm-java-code's types into source, and realm-java-code works
 without it.
 
+**Install [realm-code-model](https://github.com/embabel-worlds/realm-code-model) with it.** This realm's types extend parents declared there (`Source`, `SourceDeclaration`, `CallSite`, `SourceLocal`). Without it the realm still loads, but its types lose those parents, so a query that names a parent finds none of its rows.
+
 ```cypher
 MATCH (j:Jar {path: 'data/jars/spring-core-6.2.18.jar'})-[:HAS_METHOD]->
       (m:JavaMethod {owner: 'org.springframework.util.StringUtils', name: 'hasText'})-[:DECLARED_AT]->(d:JavaDeclaration)
