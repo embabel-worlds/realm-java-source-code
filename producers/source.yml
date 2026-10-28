@@ -1,4 +1,4 @@
-# Every producer reads source where it is, through the appliance's `source` producer kind, when a
+# Every producer reads source where it is, through the appliance's `source-tree` producer kind (`from: jar`), when a
 # query reaches it. A key is a `sourceKey` (`<jar path>!com/x/Cache.java`) or a `spanKey`
 # (`…#<line>#<name>`) that realm-java-code's rows already carry. For a jar, the source is looked
 # for in this order:
@@ -13,13 +13,13 @@
 #
 #   - { git: "https://github.com/<owner>/<repo>", ref: "v{version}" }   # {version}: the jar's
 #
-# The declarations, call-site and locals producers parse a Java file's syntax tree; a file in another
-# language answers files and spans only, with a warning saying so.
+# The declarations, call-site and locals producers read a Java file's syntax tree (tree-sitter); a file
+# in another language answers files and spans only, with a warning saying so.
 
-- { name: javaSourceFile,         kind: source, emit: files,        roots: [data/sources, src] }
-- { name: javaSourceSpan,         kind: source, emit: spans,        roots: [data/sources, src], context: 6 }
-- { name: javaDeclarationsInFile, kind: source, emit: declarations, roots: [data/sources, src] }
-- { name: javaDeclarationAt,      kind: source, emit: declarations, roots: [data/sources, src] }
-- { name: javaCallSitesAt,        kind: source, emit: callsites,    roots: [data/sources, src] }
-- { name: javaLocalsInFile,       kind: source, emit: locals,       roots: [data/sources, src] }
-- { name: javaLocalsOfMethod,     kind: source, emit: locals,       roots: [data/sources, src] }
+- { name: javaSourceFile,         kind: source-tree, from: jar, emit: files,        roots: [data/sources, src] }
+- { name: javaSourceSpan,         kind: source-tree, from: jar, emit: spans,        roots: [data/sources, src], context: 6 }
+- { name: javaDeclarationsInFile, kind: source-tree, from: jar, emit: declarations, roots: [data/sources, src] }
+- { name: javaDeclarationAt,      kind: source-tree, from: jar, emit: declarations, roots: [data/sources, src] }
+- { name: javaCallSitesAt,        kind: source-tree, from: jar, emit: calls,        roots: [data/sources, src] }
+- { name: javaLocalsInFile,       kind: source-tree, from: jar, emit: locals,       roots: [data/sources, src] }
+- { name: javaLocalsOfMethod,     kind: source-tree, from: jar, emit: locals,       roots: [data/sources, src] }
