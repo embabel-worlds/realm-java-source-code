@@ -13,7 +13,7 @@ MATCH (j:Jar {path: 'data/jars/spring-core-6.2.18.jar'})-[:HAS_METHOD]->
 RETURN m.key, d.javadoc, d.text
 ```
 
-Source is read where it is, by the appliance's `source` producer kind, when a query reaches it.
+Source is read where it is, by the appliance's `source-tree` producer kind (`from: jar`), when a query reaches it.
 Nothing is ingested or stored.
 
 ## Where the source can be

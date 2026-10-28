@@ -1,5 +1,5 @@
 # Java source as a graph, reached from compiled code. Nothing in this realm is stored: every node is
-# VIRTUAL, read by the `source` producer kind when a query reaches it. It adds edges from
+# VIRTUAL, read by the `source-tree` producer kind (`from: jar`) when a query reaches it. It adds edges from
 # realm-java-code's types into source, by re-declaring those types with joins only (declarations of
 # one type name merge), keyed on the `sourceKey` / `spanKey` their rows already carry:
 #

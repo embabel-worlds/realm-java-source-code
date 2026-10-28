@@ -11,7 +11,7 @@ description: |
   matches the jar (`matches: false` when it is another version).
 
   Ships the sources of spring-core 6.2.18, matching realm-java-code's example jar.
-  Requires realm-java-code and the appliance's `source` producer kind.
+  Requires realm-java-code and the appliance's `source-tree` producer kind (`from: jar`).
 version: 0.1.0
 maturity: experimental
 url: https://github.com/embabel-worlds/realm-java-source-code
