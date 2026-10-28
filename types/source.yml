@@ -39,6 +39,9 @@
 
 - name: SourceSpan
   properties:
+    # realm-code-model owns SourceSpan and its identity; restated so a span reached two ways is one
+    # node even where realm-code-model is not installed.
+    id: { identity: true, description: "`<root>!<path>#<fromLine>-<toLine>`." }
     sourceKey: "`<jar path>!<sourcePath>` of the file the span is in."
     root: "Where the file was found."
     path: "The file's path within the root."
@@ -77,6 +80,8 @@
   parents: [CallSite]
   description: "One call in Java source at the line a jar's call row points to: what it is called on and what is passed, with each argument's static type where the file alone shows it (`new X(…)`, a literal, a cast, a parameter, a local declared before it, a field). `argumentTypesResolved` is false where a type was written but could not be resolved without other files."
   properties:
+    # `id` is CallSite's, restated: a type's identity is read from its own declaration, not a parent's.
+    id: { identity: true, description: "`<root>!<path>#call@<line>:<column>`." }
     sourceKey: "`<jar path>!<sourcePath>` of its file."
     path: "The file's path within its root."
     column: { type: int, description: "Column of the call." }
@@ -92,6 +97,10 @@
   parents: [SourceLocal]
   description: "A local variable in Java source — a plain local, a `for` or enhanced-`for` variable, a try-with-resources resource, an `instanceof` pattern binding — with its type as written and what it is given. `varEligible`: the language allows `var` here. `varPreservesType`: `var` would keep the declared type (true for `String s = \"x\"`; false for `long n = 1`, `List<X> xs = new ArrayList<>()`, a diamond or an anonymous class); null when the initializer's type is not in the file."
   properties:
+    # `id` is SourceLocal's, restated: a type's identity is read from its own declaration, not a
+    # parent's, and a local is reached two ways (and a third from realm-jvm-logs), so the paths must
+    # converge on one node.
+    id: { identity: true, description: "`<root>!<path>#local:<name>@<line>:<column>`." }
     sourceKey: "`<jar path>!<sourcePath>` of its file."
     path: "The file's path within its root."
     column: { type: int, description: "Column of the variable's name." }
