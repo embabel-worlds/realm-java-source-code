@@ -8,10 +8,11 @@
 #   JavaMethodCall ─SOURCE_AT▶ SourceSpan  JavaMethodCall ─AT_SITE▶ JavaCallSite (receiver, arguments, their types)
 #   JavaFieldAccess ─SOURCE_AT▶ SourceSpan  SourceSpan ─IN_FILE▶ JavaSource
 #   JavaSource ─DECLARES_LOCAL▶ JavaLocal   JavaMethod ─HAS_LOCAL▶ JavaLocal (its own locals)
+#   JavaSource ─REFERENCES▶ JavaReference  (every name the file uses where a type goes)
 #
 # Each is the Java child of a language-neutral parent the standard model declares —
-# JavaSource:Source, JavaDeclaration:SourceDeclaration, JavaCallSite:CallSite, JavaLocal:SourceLocal — and SourceSpan is
-# itself neutral. A span's `matches` is false when the name the jar expects is not on its lines:
+# JavaSource:Source, JavaDeclaration:SourceDeclaration, JavaCallSite:CallSite, JavaLocal:SourceLocal,
+# JavaReference:SourceReference — and SourceSpan is itself neutral. A span's `matches` is false when the name the jar expects is not on its lines:
 # the source is not the jar's version, and its line numbers cannot be trusted.
 
 - name: JavaSource
@@ -109,3 +110,34 @@
         description: "Every local variable in a file, in file order." }
     - { anchorLabel: JavaMethod, relationship: HAS_LOCAL, keyField: spanKey, recordKeyField: anchorKey, producer: javaLocalsOfMethod,
         description: "The local variables of one method, constructor or initializer." }
+
+- name: JavaReference
+  parents: [SourceReference]
+  visibility: internal
+  userAnchor: false
+  description: "A name a Java file uses where a type goes — a parameter's, field's or return type, a supertype, a generic argument or bound, an annotation, a `new`, a cast, a pattern, a `throws` or a `catch` — with the declaration it is used in. The one SourceReference that can say `resolution: exact`: where the file alone shows which type the name means (a type it declares, a single-type import, java.lang, its own package) `binaryName` is that type, and joins realm-java-code's JavaType by `name`; otherwise `name`, and any type of that name may be meant. A declaration's own name, and a type parameter inside the declaration that declares it, are not references. Reach it from (:JavaSource)-[:REFERENCES]->; name the parent (SourceReference) to read every language at once."
+  properties:
+    id: { identity: true, description: "`<root>!<path>#ref:<name>@<line>:<column>`." }
+    sourceKey: "`<jar path>!<sourcePath>` of its file."
+    path: "The file's path within its root."
+    language: "`java`."
+    column: { type: int, description: "Column of the name." }
+    qualified: "The name as written, type arguments left off: `java.io.Reader`, `Map.Entry`, `Override`."
+    binaryName: "Erased binary name of the type meant (`java.util.Map`, `com.x.Cache$Key`) when `resolution` is `exact`; null otherwise."
+    enclosingKind: "Kind of the enclosing declaration: class, interface, enum, record, annotation, field, constructor, method or initializer."
+    enclosingOwner: "Binary name of the type declaring the enclosing member; empty inside an anonymous or local class."
+    resolution: "`exact` where the file alone shows the type: one it declares, a single-type import, java.lang, or its own package. `name` where only the name is known — one an on-demand import (`import a.b.*`) could explain."
+    url: "The line on the web, for a git root on a known host."
+  virtualJoins:
+    - { anchorLabel: JavaSource, relationship: REFERENCES, keyField: sourceKey, recordKeyField: anchorKey, maxFanoutTotal: 200000,
+        producer: javaReferencesInFile,
+        description: "Every type name a file uses, in file order. A whole jar's references are read locally, and a file has many more references than declarations, so the cap is set for a jar's worth." }
+  # FEW-SHOT for the text-to-Cypher generator: a type-name question is answered by NAME on the
+  # parent label, and counted per file with DISTINCT, since a file's nested types each reach it.
+  examples:
+    - q: "which files use a type named Cache"
+      cypher: |
+        MATCH (:Jar {path: 'data/jars/app-1.0.jar'})-[:HAS_TYPE]->(:JavaType)-[:DEFINED_IN]->(s:JavaSource)
+              -[:REFERENCES]->(r:SourceReference {name: 'Cache'})
+        RETURN s.path AS file, count(DISTINCT r) AS uses, collect(DISTINCT r.enclosing) AS usedIn
+        ORDER BY uses DESC

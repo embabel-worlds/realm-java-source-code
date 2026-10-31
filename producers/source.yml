@@ -13,8 +13,10 @@
 #
 #   - { git: "https://github.com/<owner>/<repo>", ref: "v{version}" }   # {version}: the jar's
 #
-# The declarations, call-site and locals producers parse a Java file's syntax tree; a file in another
-# language answers files and spans only, with a warning saying so.
+# The declarations, call-site, locals and references producers parse a Java file's syntax tree; a file
+# in another language answers files and spans only, with a warning saying so. `emit: references` needs
+# an appliance whose `source` kind has it (engine branch `java-reference`); an older one refuses the
+# producer at load, naming the emits it knows.
 
 - { name: javaSourceFile,         kind: source, emit: files,        roots: [data/sources, src] }
 - { name: javaSourceSpan,         kind: source, emit: spans,        roots: [data/sources, src], context: 6 }
@@ -23,3 +25,4 @@
 - { name: javaCallSitesAt,        kind: source, emit: callsites,    roots: [data/sources, src] }
 - { name: javaLocalsInFile,       kind: source, emit: locals,       roots: [data/sources, src] }
 - { name: javaLocalsOfMethod,     kind: source, emit: locals,       roots: [data/sources, src] }
+- { name: javaReferencesInFile,   kind: source, emit: references,   roots: [data/sources, src] }

@@ -5,7 +5,7 @@ The source a Java jar was compiled from, reached from what
 this realm only adds edges from realm-java-code's types into source, and realm-java-code works
 without it.
 
-**Install [realm-code-model](https://github.com/embabel-worlds/realm-code-model) with it.** This realm's types extend parents declared there (`Source`, `SourceDeclaration`, `CallSite`, `SourceLocal`). Without it the realm still loads, but its types lose those parents, so a query that names a parent finds none of its rows.
+**Install [realm-code-model](https://github.com/embabel-worlds/realm-code-model) with it.** This realm's types extend parents declared there (`Source`, `SourceDeclaration`, `CallSite`, `SourceLocal`, `SourceReference`). Without it the realm still loads, but its types lose those parents, so a query that names a parent finds none of its rows.
 
 ```cypher
 MATCH (j:Jar {path: 'data/jars/spring-core-6.2.18.jar'})-[:HAS_METHOD]->
@@ -37,8 +37,16 @@ means the name the jar expects is not on those lines.
 See `types/source.yml`. JavaType ─DEFINED_IN▶ JavaSource ─DECLARES▶ JavaDeclaration; JavaMethod,
 JavaMethodCall and JavaFieldAccess ─SOURCE_AT▶ SourceSpan; JavaMethod ─DECLARED_AT▶ JavaDeclaration;
 JavaMethodCall ─AT_SITE▶ JavaCallSite; JavaSource ─DECLARES_LOCAL▶ JavaLocal and JavaMethod
-─HAS_LOCAL▶ JavaLocal. JavaSource, JavaDeclaration, JavaCallSite and JavaLocal are the Java children
-of the standard model's `Source`, `SourceDeclaration`, `CallSite` and `SourceLocal`.
+─HAS_LOCAL▶ JavaLocal; JavaSource ─REFERENCES▶ JavaReference. JavaSource, JavaDeclaration,
+JavaCallSite, JavaLocal and JavaReference are the Java children of the standard model's `Source`,
+`SourceDeclaration`, `CallSite`, `SourceLocal` and `SourceReference`.
+
+A reference is every name a file uses where a type goes (a field's or parameter's type, a supertype, a
+generic argument, an annotation, a `new`), and Java's is the one `SourceReference` that can say
+`resolution: exact`: where the file alone shows which type is meant, `binaryName` names it, so
+`(:JavaReference)` joins `(:JavaType)` by name. `emit: references` needs the `source` kind of engine
+branch `java-reference` or later; an older appliance refuses the `javaReferencesInFile` producer at
+load and the rest of the realm still answers.
 
 Declarations and call sites come from a Java file's syntax tree, parsed on demand. A call site's
 argument types are resolved from the file alone (`new X(…)`, literals, casts, parameters, locals,
