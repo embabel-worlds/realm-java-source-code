@@ -16,7 +16,12 @@
 
 - name: JavaSource
   parents: [Source]
-  description: "A Java (or other JVM language) source file a jar's classes were compiled from, read from a -sources.jar, a mounted checkout or a git commit. `root` says which; `candidates` above 1 means more than one file in the root has that package path (two modules), and the first was read. Its declarations: DECLARES."
+  examples:
+    - q: "where is the source of org.springframework.util.StringUtils, and how long is it"
+      cypher: |
+        MATCH (j:Jar {path: 'data/jars/spring-core-6.2.18.jar'})-[:HAS_TYPE]->(t:JavaType {name: 'org.springframework.util.StringUtils'})-[:DEFINED_IN]->(s:JavaSource)
+        RETURN s.root, s.path, s.lines
+  description: "One Java (or other JVM language) source file a jar's classes were compiled from, identified by `id` = `<root>!<path>`, read from a -sources.jar, a mounted checkout or a git commit when a query reaches it; nothing is stored. `root` says which; `candidates` above 1 means more than one file in the root has that package path (two modules), and the first was read. Its declarations: DECLARES."
   properties:
     id: { identity: true, description: "`<root>!<path>`." }
     root: "Where it was found: a -sources.jar or folder (relative to the world's data/ or this realm), or `host/repo@commit`."
@@ -37,11 +42,11 @@
     - { anchorLabel: SourceSpan, relationship: IN_FILE, keyField: sourceKey, recordKeyField: anchorKey, producer: javaSourceFile,
         description: "The file a span of lines is in." }
 
+# realm-code-model owns SourceSpan: its description, its properties and its identity (`id`). This
+# realm extends it with the Java joins and the properties only a jar's source adds, and restates
+# none of the owner's, so the type has one declaration of each and one identity.
 - name: SourceSpan
   properties:
-    # realm-code-model owns SourceSpan and its identity; restated so a span reached two ways is one
-    # node even where realm-code-model is not installed.
-    id: { identity: true, description: "`<root>!<path>#<fromLine>-<toLine>`." }
     sourceKey: "`<jar path>!<sourcePath>` of the file the span is in."
     root: "Where the file was found."
     path: "The file's path within the root."
@@ -56,7 +61,12 @@
 
 - name: JavaDeclaration
   parents: [SourceDeclaration]
-  description: "A declaration in a Java file's syntax tree — class, interface, enum, record, annotation, field, constructor, method or initializer — with its exact extent, signature, modifiers, annotations, Javadoc and (for members) full numbered text. `matches` (reached from a method) is false when the declaration around the line is not the method the jar names there."
+  examples:
+    - q: "show me the code of StringUtils.hasText"
+      cypher: |
+        MATCH (j:Jar {path: 'data/jars/spring-core-6.2.18.jar'})-[:HAS_METHOD]->(m:JavaMethod {owner: 'org.springframework.util.StringUtils', name: 'hasText'})-[:DECLARED_AT]->(d:JavaDeclaration)
+        RETURN m.key, d.signature, d.text ORDER BY d.fromLine
+  description: "One declaration in a Java file's syntax tree, identified by `id` = `<root>!<path>#<kind>:<name>@<fromLine>` — class, interface, enum, record, annotation, field, constructor, method or initializer — with its exact extent, signature, modifiers, annotations, Javadoc and (for members) full numbered text. `matches` (reached from a method) is false when the declaration around the line is not the method the jar names there."
   properties:
     id: { identity: true, description: "`<root>!<path>#<kind>:<name>@<fromLine>`." }
     sourceKey: "`<jar path>!<sourcePath>` of its file."
@@ -66,7 +76,7 @@
     annotations: { cardinality: LIST, description: "Annotation names as written." }
     parameters: { cardinality: LIST, description: "Parameters as written, `Type name`." }
     returnType: "A method's return type as written."
-    type: "A field's type as written."
+    type: "A field's declared type exactly as the source writes it (`Map<String, Object>`, `int[]`); open-ended, not an enumeration; for a field, not a method (see `returnType`)."
     matches: { type: boolean, description: "The declaration's name is the one the jar expects at the line." }
     url: "The declaration on the web, for a git root on a known host."
   virtualJoins:
@@ -78,7 +88,12 @@
 
 - name: JavaCallSite
   parents: [CallSite]
-  description: "One call in Java source at the line a jar's call row points to: what it is called on and what is passed, with each argument's static type where the file alone shows it (`new X(…)`, a literal, a cast, a parameter, a local declared before it, a field). `argumentTypesResolved` is false where a type was written but could not be resolved without other files."
+  examples:
+    - q: "what does spring-core put into ClassUtils.commonClassCache, as the code writes it"
+      cypher: |
+        MATCH (j:Jar {path: 'data/jars/spring-core-6.2.18.jar'})-[:HAS_ACCESS]->(a:JavaFieldAccess {field: 'org.springframework.util.ClassUtils.commonClassCache'})-[:SAME_METHOD_CALL]->(c:JavaMethodCall {calleeName: 'put'})-[:AT_SITE]->(cs:JavaCallSite)
+        RETURN a.method, cs.line, cs.arguments, cs.text
+  description: "One call in Java source at the line a jar's call row points to, identified by `id` = `<root>!<path>#call@<line>:<column>`: what it is called on and what is passed, with each argument's static type where the file alone shows it (`new X(…)`, a literal, a cast, a parameter, a local declared before it, a field). `argumentTypesResolved` is false where a type was written but could not be resolved without other files."
   properties:
     # `id` is CallSite's, restated: a type's identity is read from its own declaration, not a parent's.
     id: { identity: true, description: "`<root>!<path>#call@<line>:<column>`." }
@@ -95,7 +110,7 @@
 
 - name: JavaLocal
   parents: [SourceLocal]
-  description: "A local variable in Java source — a plain local, a `for` or enhanced-`for` variable, a try-with-resources resource, an `instanceof` pattern binding — with its type as written and what it is given. `varEligible`: the language allows `var` here. `varPreservesType`: `var` would keep the declared type (true for `String s = \"x\"`; false for `long n = 1`, `List<X> xs = new ArrayList<>()`, a diamond or an anonymous class); null when the initializer's type is not in the file."
+  description: "One local variable in Java source, identified by `id` = `<root>!<path>#local:<name>@<line>:<column>` — a plain local, a `for` or enhanced-`for` variable, a try-with-resources resource, an `instanceof` pattern binding — with its type as written and what it is given. `varEligible`: the language allows `var` here. `varPreservesType`: `var` would keep the declared type (true for `String s = \"x\"`; false for `long n = 1`, `List<X> xs = new ArrayList<>()`, a diamond or an anonymous class); null when the initializer's type is not in the file."
   properties:
     # `id` is SourceLocal's, restated: a type's identity is read from its own declaration, not a
     # parent's, and a local is reached two ways (and a third from realm-jvm-logs), so the paths must

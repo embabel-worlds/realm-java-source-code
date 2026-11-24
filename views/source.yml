@@ -3,11 +3,13 @@
 
 - name: JavaTypeSource
   description: >-
-    Where a type's source is: which root answered (a -sources.jar, a folder, a git commit), its
-    path there, and its size - the first call when source matters, and proof it was found.
+    Where a type's source file is found, and proof it was found. Which root answered (a
+    -sources.jar, a folder, a git commit), its path there, language and size: the first call when
+    source matters. No row means no source was found for the type; the code itself is in the
+    declaration views.
   params:
-    jar: { type: string, description: "Path of the jar." }
-    type: { type: string, description: "Binary class name, e.g. com.example.Cache." }
+    jar: { required: true, type: string, description: "Path of the jar." }
+    type: { required: true, type: string, description: "Binary class name, e.g. com.example.Cache." }
   cypher: |
     MATCH (j:Jar {path: $jar})-[:HAS_TYPE]->(t:JavaType {name: $type})-[:DEFINED_IN]->(s:JavaSource)
     RETURN t.name AS type, s.root AS root, s.path AS path, s.language AS language, s.lines AS lines,
@@ -15,11 +17,13 @@
 
 - name: JavaMethodDeclarations
   description: >-
-    A type's methods (or those with one name) as source declares them: signature, Javadoc,
-    annotations and the whole numbered body - what a stack frame's method actually does.
+    A type's methods as source declares them, with Javadoc and the whole body. All of them, or those
+    with one name: signature, Javadoc, annotations and the numbered body, which is what a stack
+    frame's method actually does. Methods the type declares itself only, not inherited ones;
+    `matches` false marks source of another version.
   params:
-    jar: { type: string, description: "Path of the jar." }
-    type: { type: string, description: "Binary class name declaring the method." }
+    jar: { required: true, type: string, description: "Path of the jar." }
+    type: { required: true, type: string, description: "Binary class name declaring the method." }
     method: { type: string, default: "", description: "Method name; empty = every method of the type." }
   cypher: |
     MATCH (j:Jar {path: $jar})-[:HAS_METHOD]->(m:JavaMethod {owner: $type})-[:DECLARED_AT]->(d:JavaDeclaration)
@@ -30,12 +34,13 @@
 
 - name: JavaCallersWithCode
   description: >-
-    Who calls a method (any target: the JDK, another library, the jar), with the source lines at
-    each call - the callers view with the code beside it.
+    Who calls a method, with the source lines at each call. Any target: the JDK, another library,
+    the jar. The callers view with the code beside it, the lines around each caller's first call
+    site only. Matched on the exact receiver type the bytecode names; at most `limit` rows.
   params:
-    jar: { type: string, description: "Path of the jar." }
-    type: { type: string, description: "Binary name of the called type." }
-    method: { type: string, description: "Called method name; `<init>` for a constructor." }
+    jar: { required: true, type: string, description: "Path of the jar." }
+    type: { required: true, type: string, description: "Binary name of the called type." }
+    method: { required: true, type: string, description: "Called method name; `<init>` for a constructor." }
     limit: { type: int, default: 50, description: "Maximum rows." }
   cypher: |
     MATCH (j:Jar {path: $jar})-[:HAS_CALL]->(c:JavaMethodCall {calleeOwner: $type, calleeName: $method})
@@ -46,12 +51,13 @@
 
 - name: JavaMapPutCallSites
   description: >-
-    Every call that puts into a JDK map in the jar, as source writes it: the map it is called on,
-    each argument, and the key's static type where the file shows it - joined to whether that type
-    (when it is in the jar) has its own hashCode. Finds identity-hashed keys put into maps held
-    anywhere, locals included, which the field view cannot see.
+    JDK map puts in a jar's source, with the key's static type and its hashCode. The map it is
+    called on, each argument, and the key's static type where the file shows it, joined to whether
+    that type (when it is in the jar) has its own hashCode. Finds identity-hashed keys put into maps
+    held anywhere, locals included, which the field view cannot see. Only `java.util` maps' put,
+    putIfAbsent, computeIfAbsent and merge; at most `limit` rows.
   params:
-    jar: { type: string, description: "Path of the jar." }
+    jar: { required: true, type: string, description: "Path of the jar." }
     limit: { type: int, default: 200, description: "Maximum rows." }
   cypher: |
     MATCH (j:Jar {path: $jar})-[:HAS_CALL]->(c:JavaMethodCall)-[:AT_SITE]->(cs:JavaCallSite)
@@ -65,11 +71,13 @@
 
 - name: JavaFieldMutationCode
   description: >-
-    For one field: each method that touches it and the JDK container calls that method makes,
-    with the code at each call and what it passes - JavaFieldMutationSites with the source.
+    For one field, each touching method's JDK container calls, with the code. What each call passes,
+    at its line: JavaFieldMutationSites with the source. Approximate the same way: the container
+    call is in the same method, not proven to be on that field. Methods with no such call are left
+    out.
   params:
-    jar: { type: string, description: "Path of the jar." }
-    field: { type: string, description: "Field key `<binary owner>.<name>`, e.g. org.example.Util.CACHE." }
+    jar: { required: true, type: string, description: "Path of the jar." }
+    field: { required: true, type: string, description: "Field key `<binary owner>.<name>`, e.g. org.example.Util.CACHE." }
   cypher: |
     MATCH (j:Jar {path: $jar})-[:HAS_ACCESS]->(a:JavaFieldAccess {field: $field})-[:SAME_METHOD_CALL]->(c:JavaMethodCall)
     WHERE c.calleeOwner STARTS WITH 'java.' AND c.calleeName IN ['put', 'putAll', 'putIfAbsent', 'computeIfAbsent',
@@ -81,14 +89,14 @@
 
 - name: JavaSourceDrift
   description: >-
-    Whether the source found matches the jar, for one package: per class, how many methods' first
-    lines show the method's name. A class with misses was read from another version of its source,
-    and its line numbers cannot be trusted. Counts ordinary classes' declared methods only:
-    constructors (whose first line is often a field initializer), synthetic methods, and the
-    members a compiler writes for records and enums never show their own name on their line.
+    Whether the source found matches the jar, per class in one package. Per class, how many methods'
+    first lines show the method's name. A class with misses was read from another version of its
+    source, and its line numbers cannot be trusted. Counts ordinary classes' declared methods only:
+    constructors (whose first line is often a field initializer), synthetic methods, and the members
+    a compiler writes for records and enums never show their own name on their line.
   params:
-    jar: { type: string, description: "Path of the jar." }
-    package: { type: string, description: "Dotted package name to check." }
+    jar: { required: true, type: string, description: "Path of the jar." }
+    package: { required: true, type: string, description: "Dotted package name to check." }
   cypher: |
     MATCH (j:Jar {path: $jar})-[:HAS_TYPE]->(t:JavaType {packageName: $package, kind: 'class'})
           -[:DECLARES_METHOD]->(m:JavaMethod {kind: 'method', isSynthetic: false})-[:SOURCE_AT]->(s:SourceSpan)
@@ -98,11 +106,11 @@
 
 - name: JavaLongestMethods
   description: >-
-    The longest methods and constructors in a jar's code, by the lines their declarations span in
-    source (Javadoc and annotations excluded), with where each is and its code - the first place to
-    look for a method doing too much.
+    A jar's longest methods and constructors, by lines their source spans. Javadoc and annotations
+    excluded, with where each is and its code: the first place to look for a method doing too much.
+    Top-level types' Java files only, so not Kotlin or other languages; at most `limit` rows.
   params:
-    jar: { type: string, description: "Path of the jar." }
+    jar: { required: true, type: string, description: "Path of the jar." }
     package: { type: string, default: "", description: "Dotted package prefix to look under; empty = the whole jar." }
     limit: { type: int, default: 10, description: "Maximum rows." }
   cypher: |
@@ -115,11 +123,11 @@
 
 - name: JavaExplicitLocalsVarWouldKeep
   description: >-
-    Methods that declare a local with an explicit type where `var` would do and keep the same type -
-    `String s = "x"` rather than `var s = "x"` - with each such declaration. Only locals the file
-    proves `var` would not change; set `type` to look at one declared type (e.g. String).
+    Methods with explicitly typed locals that `var` would keep unchanged. `String s = "x"` rather
+    than `var s = "x"`, with each such declaration. Only locals the file proves `var` would not
+    change; set `type` to look at one declared type (e.g. String). At most `limit` methods.
   params:
-    jar: { type: string, description: "Path of the jar." }
+    jar: { required: true, type: string, description: "Path of the jar." }
     type: { type: string, default: "", description: "Declared type as written, e.g. String; empty = any." }
     limit: { type: int, default: 50, description: "Maximum methods." }
   cypher: |
@@ -133,12 +141,13 @@
 
 - name: JavaMethodLocals
   description: >-
-    One method's local variables as source declares them: each one's type as written, what it is
-    given, and whether `var` would be legal and keep its type.
+    One method's local variables as source declares them, and whether `var` fits. Each one's type as
+    written, what it is given, and whether `var` would be legal and keep its type. Locals only, not
+    parameters or fields; every overload with that name is included.
   params:
-    jar: { type: string, description: "Path of the jar." }
-    type: { type: string, description: "Binary class name declaring the method." }
-    method: { type: string, description: "Method name; `<init>` for a constructor." }
+    jar: { required: true, type: string, description: "Path of the jar." }
+    type: { required: true, type: string, description: "Binary class name declaring the method." }
+    method: { required: true, type: string, description: "Method name; `<init>` for a constructor." }
   cypher: |
     MATCH (j:Jar {path: $jar})-[:HAS_METHOD]->(m:JavaMethod {owner: $type, name: $method})-[:HAS_LOCAL]->(l:JavaLocal)
     RETURN m.key AS method, l.line AS line, l.kind AS kind, l.declaredType AS declaredType, l.name AS name,
