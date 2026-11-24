@@ -1,7 +1,7 @@
 name: java-source-code
 description: |
-  The source code a Java jar was compiled from, reached from what realm-java-code finds in the
-  jar: a type's file, the code at a method, a call or a field access, a method's whole
+  The Java source a jar was compiled from, read on demand and joined to its bytecode by line.
+  Reached from what realm-java-code finds in the jar: a type's file, the code at a method, a call or a field access, a method's whole
   declaration, and each call site with what it passes. Read where the source is, when a query
   reaches it - a `-sources.jar` beside the jar, a mounted checkout, or a git repository at a
   commit - and parsed on demand. Nothing is ingested and nothing is stored.
@@ -12,8 +12,12 @@ description: |
 
   Ships the sources of spring-core 6.2.18, matching realm-java-code's example jar.
   Requires realm-java-code and the appliance's `source-tree` producer kind (`from: jar`).
-version: 0.1.0
+version: 0.1.1
 maturity: experimental
+requires:
+  # Its joins start from realm-java-code's types; its own types extend code-model's parents.
+  code-model: "[0.1.0,1.0.0)"
+  java-code: "[0.1.0,1.0.0)"
 url: https://github.com/embabel-worlds/realm-java-source-code
 author: Rod Johnson
 tags:
