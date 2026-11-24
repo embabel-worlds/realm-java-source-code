@@ -42,12 +42,11 @@
     - { anchorLabel: SourceSpan, relationship: IN_FILE, keyField: sourceKey, recordKeyField: anchorKey, producer: javaSourceFile,
         description: "The file a span of lines is in." }
 
+# realm-code-model owns SourceSpan: its description, its properties and its identity (`id`). This
+# realm extends it with the Java joins and the properties only a jar's source adds, and restates
+# none of the owner's, so the type has one declaration of each and one identity.
 - name: SourceSpan
-  description: "One window of numbered source lines around one line, identified by `id` = `<root>!<path>#<fromLine>-<toLine>`: the code at a method, a call or a field access, read when a query reaches it. `matches` is false when the name the jar expects is not on those lines: the source is another version, and its line numbers cannot be trusted."
   properties:
-    # realm-code-model owns SourceSpan and its identity; restated so a span reached two ways is one
-    # node even where realm-code-model is not installed.
-    id: { identity: true, description: "`<root>!<path>#<fromLine>-<toLine>`." }
     sourceKey: "`<jar path>!<sourcePath>` of the file the span is in."
     root: "Where the file was found."
     path: "The file's path within the root."
