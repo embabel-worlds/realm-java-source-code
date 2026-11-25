@@ -12,7 +12,7 @@ description: |
 
   Ships the sources of spring-core 6.2.18, matching realm-java-code's example jar.
   Requires realm-java-code and the appliance's `source-tree` producer kind (`from: jar`).
-version: 0.1.1
+version: 0.1.2
 maturity: experimental
 requires:
   # Its joins start from realm-java-code's types; its own types extend code-model's parents.
